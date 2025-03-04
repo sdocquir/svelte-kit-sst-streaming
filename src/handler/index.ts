@@ -9,9 +9,9 @@ import { manifest } from "../manifest.js";
 // @ts-ignore
 import prerenderedFiles from "./prerendered-file-list.js";
 import type {
-  APIGatewayProxyEventV2,
-  APIGatewayProxyEvent,
-  CloudFrontRequestEvent,
+	APIGatewayProxyEventV2,
+	APIGatewayProxyEvent,
+	CloudFrontRequestEvent,
 } from "aws-lambda";
 import type { ResponseStream } from "./types.js";
 import { InternalEvent, convertFrom, convertTo } from "./event-mapper.js";
@@ -23,120 +23,118 @@ installPolyfills();
 const app: ServerType = new Server(manifest);
 await app.init({ env: process.env as Record<string, string> });
 
-export const handler: any = awslambda.streamifyResponse(handlerInternal) 
-
-function streamError(
-  statusCode: number,
-  error: string | Error,
-  responseStream: ResponseStream
-) {
-  console.error(error);
-
-  responseStream = awslambda.HttpResponseStream.from(responseStream, {
-    statusCode,
-  });
-
-  responseStream.write(error.toString());
-  responseStream.end();
-}
+export const handler: any = awslambda.streamifyResponse(handlerInternal)
 
 
 async function handlerInternal(
-  event: APIGatewayProxyEventV2 | CloudFrontRequestEvent | APIGatewayProxyEvent,
-  responseStream: ResponseStream
+	event: APIGatewayProxyEventV2 | CloudFrontRequestEvent | APIGatewayProxyEvent,
+	responseStream: ResponseStream
 ) {
-  debug("event", event);
+	debug("event", event);
 
-  // Parse Lambda event
-  const internalEvent = convertFrom(event);
+	// Parse Lambda event
+	const internalEvent = convertFrom(event);
 
-  // Check request is for prerendered file
-  // if (internalEvent.method === "GET") {
-  //   const filePath = isPrerenderedFile(internalEvent.rawPath);
-  //   if (filePath) {
-  //     return internalEvent.type === "cf"
-  //       ? formatCloudFrontPrerenderedResponse(
-  //           event as CloudFrontRequestEvent,
-  //           filePath
-  //         )
-  //       : formatAPIGatewayPrerenderedResponse(internalEvent, filePath);
-  //   }
-  // }
+	// Check request is for prerendered file
+	if (internalEvent.method === "GET") {
+	  const filePath = isPrerenderedFile(internalEvent.rawPath);
+	  if (filePath) {
+	    return internalEvent.type === "cf"
+	      ? formatCloudFrontPrerenderedResponse(
+	          event as CloudFrontRequestEvent,
+	          filePath
+	        )
+	      : formatAPIGatewayPrerenderedResponse(internalEvent, filePath);
+	  }
+	}
 
-  // Process request
-  const requestUrl = internalEvent.url;
-  const requestProps = {
-    method: internalEvent.method,
-    headers: internalEvent.headers,
-    body: ["GET", "HEAD"].includes(internalEvent.method)
-      ? undefined
-      : internalEvent.body,
-  };
-  debug("request", requestUrl, requestProps);
-  const request = new Request(requestUrl, requestProps);
+	// Process request
+	const requestUrl = internalEvent.url;
+	const requestProps = {
+		method: internalEvent.method,
+		headers: internalEvent.headers,
+		body: ["GET", "HEAD"].includes(internalEvent.method)
+			? undefined
+			: internalEvent.body,
+	};
+	debug("request", requestUrl, requestProps);
+	const request = new Request(requestUrl, requestProps);
 
-  const response: Response = await app.respond(request, {
-    getClientAddress: () => internalEvent.remoteAddress,
-  });
-  debug("response", response);
+	const response: Response = await app.respond(request, {
+		getClientAddress: () => internalEvent.remoteAddress,
+	});
+	debug("response", response);
 
-  //stream response back to Cloudfront
+	//stream response back to Cloudfront
 
-
-  //Parse the response into lambda proxy response
-  if (response) {
-    await convertTo({
-      type: internalEvent.type,
-      response,
-      responseStream,
-      cookies: undefined
-    })
-  }
-  // return {
-  //   streamError(404, "Not found", responseStream);
-  // };
+	//Parse the response into lambda proxy response
+	if (response) {
+		await convertTo({
+			type: internalEvent.type,
+			response,
+			responseStream,
+			cookies: undefined
+		})
+	}
+	return streamError(404, "Not found", responseStream);
 }
 
-// function isPrerenderedFile(uri: string) {
-//   // remove leading and trailing slashes
-//   uri = uri.replace(/^\/|\/$/g, "");
+function streamError(
+	statusCode: number,
+	error: string | Error,
+	responseStream: ResponseStream
+) {
+	console.error(error);
 
-//   if (uri === "") {
-//     return prerenderedFiles.includes("index.html") ? "index.html" : undefined;
-//   }
+	responseStream = awslambda.HttpResponseStream.from(responseStream, {
+		statusCode,
+	});
 
-//   if (prerenderedFiles.includes(uri)) {
-//     return uri;
-//   }
-//   if (prerenderedFiles.includes(uri + "/index.html")) {
-//     return uri + "/index.html";
-//   }
-//   if (prerenderedFiles.includes(uri + ".html")) {
-//     return uri + ".html";
-//   }
-// }
+	responseStream.write(error.toString());
+	responseStream.end();
+}
 
-// function formatCloudFrontPrerenderedResponse(
-//   event: CloudFrontRequestEvent,
-//   filePath: string
-// ) {
-//   const request = event.Records[0].cf.request;
-//   request.uri = `/${filePath}`;
-//   return request;
-// }
+function isPrerenderedFile(uri: string) {
+	// remove leading and trailing slashes
+	uri = uri.replace(/^\/|\/$/g, "");
 
-// function formatAPIGatewayPrerenderedResponse(
-//   internalEvent: InternalEvent,
-//   filePath: string
-// ) {
-//   return convertTo({
-//     type: internalEvent.type,
-//     statusCode: 200,
-//     headers: {
-//       "content-type": "text/html",
-//       "cache-control": "public, max-age=0, s-maxage=31536000, must-revalidate",
-//     },
-//     isBase64Encoded: false,
-//     body: fs.readFileSync(path.join("prerendered", filePath), "utf8"),
-//   });
-// }
+	if (uri === "") {
+		return prerenderedFiles.includes("index.html") ? "index.html" : undefined;
+	}
+
+	if (prerenderedFiles.includes(uri)) {
+		return uri;
+	}
+	if (prerenderedFiles.includes(uri + "/index.html")) {
+		return uri + "/index.html";
+	}
+	if (prerenderedFiles.includes(uri + ".html")) {
+		return uri + ".html";
+	}
+}
+
+function formatCloudFrontPrerenderedResponse(
+	event: CloudFrontRequestEvent,
+	filePath: string
+) {
+	const request = event.Records[0].cf.request;
+	request.uri = `/${filePath}`;
+	return request;
+}
+
+function formatAPIGatewayPrerenderedResponse(
+	internalEvent: InternalEvent,
+	filePath: string
+) {
+	const response = new Response(fs.readFileSync(path.join("prerendered", filePath), "utf8"), {
+		headers: {
+			"content-type": "text/html",
+			"cache-control": "public, max-age=0, s-maxage=31536000, must-revalidate",
+		},
+		status: 200,
+	});
+	return convertTo({
+		type: internalEvent.type,
+		response: response,
+	});
+}

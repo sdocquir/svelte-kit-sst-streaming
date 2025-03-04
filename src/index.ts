@@ -6,7 +6,7 @@ const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
 export default function () {
   const adapter = {
-    name: "svelte-kit-sst",
+    name: "svelte-kit-sst-streaming",
     async adapt(builder: Builder) {
       const out = path.join(".svelte-kit", "svelte-kit-sst");
       const clientDir = path.join(out, "client");
